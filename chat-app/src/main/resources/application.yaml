@@ -1,0 +1,11 @@
+quarkus:
+  http:
+    port: 8080
+
+reactive-stomp:
+  heartbeat: 1000, 1000
+  messaging:
+    message-endpoint:
+      paths: /endpoint
+  stomp:
+    ackPeriod: 1000

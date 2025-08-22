@@ -1,10 +1,13 @@
 package com.github.deepend0.reactivestompmessaging.service;
 
+import jakarta.enterprise.context.ApplicationScoped;
+
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+@ApplicationScoped
 public class ChatService {
     private final Map<String, Set<String>> userChats = new ConcurrentHashMap<>();
     private final UserService userService;

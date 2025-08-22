@@ -3,12 +3,17 @@ package com.github.deepend0.reactivestompmessaging.web;
 import com.github.deepend0.reactivestomp.messaging.client.MessagingClient;
 import com.github.deepend0.reactivestomp.messaging.messageendpoint.MessageEndpoint;
 import com.github.deepend0.reactivestomp.messaging.messageendpoint.MessageEndpointResponse;
+import com.github.deepend0.reactivestompmessaging.model.ChannelDto;
+import com.github.deepend0.reactivestompmessaging.model.ChannelRequest;
+import com.github.deepend0.reactivestompmessaging.model.UserDto;
 import com.github.deepend0.reactivestompmessaging.service.ChatService;
 import com.github.deepend0.reactivestompmessaging.service.UserService;
 import io.smallrye.mutiny.Uni;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Set;
 
+@ApplicationScoped
 public class ChatMessageEndpoint {
     private final UserService userService;
     private final ChatService chatService;
@@ -21,23 +26,24 @@ public class ChatMessageEndpoint {
     }
 
     @MessageEndpoint(inboundDestination = "/endpoint/chat/connect")
-    public Uni<MessageEndpointResponse<Set<String>>> connect(String username) {
+    public Uni<MessageEndpointResponse<Set<String>>> connect(UserDto userDto) {
         Set<String> currentUsers = userService.getCurrentUsers();
-        return Uni.createFrom().item(MessageEndpointResponse.of("/topic/user/" + username + "/connected", currentUsers))
-                .call(()->messagingClient.send("/topic/users/connected", username));
+        return Uni.createFrom().item(MessageEndpointResponse.of("/topic/user/" + userDto.user() + "/connected", currentUsers))
+                .call(()->messagingClient.send("/topic/users/connected", userDto));
     }
 
     @MessageEndpoint(inboundDestination = "/endpoint/chat/create")
-    public Uni<Void> startChatWith(String username, String targetUsername) {
-        String channelId = chatService.createChannel(Set.of(username, targetUsername));
-        Uni<Void> user1Uni =  messagingClient.send("/topic/user/" + username + "/channel", channelId);
-        Uni<Void> user2Uni =  messagingClient.send("/topic/user/" + targetUsername + "/channel", channelId);
+    public Uni<Void> startChatWith(ChannelRequest channelRequest) {
+        String channelId = chatService.createChannel(Set.of(channelRequest.users()));
+        ChannelDto channelDto = new ChannelDto(channelId, channelRequest.users());
+        Uni<Void> user1Uni =  messagingClient.send("/topic/user/" + channelRequest.users()[0] + "/channel", channelDto);
+        Uni<Void> user2Uni =  messagingClient.send("/topic/user/" + channelRequest.users()[1] + "/channel", channelDto);
         return Uni.combine().all().unis(user1Uni, user2Uni).discardItems();
     }
 
     @MessageEndpoint(inboundDestination = "/endpoint/chat/disconnect")
-    public MessageEndpointResponse<String> disconnect(String username) {
-        userService.removeUser(username);
-        return MessageEndpointResponse.of("/topic/users/disconnected", username);
+    public MessageEndpointResponse<UserDto> disconnect(UserDto userDto) {
+        userService.removeUser(userDto.user());
+        return MessageEndpointResponse.of("/topic/users/disconnected", userDto);
     }
 }

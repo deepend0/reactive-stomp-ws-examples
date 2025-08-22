@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Chat</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Modern STOMP client -->
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #login, #chat { display: none; }
+        #userList { width: 200px; float: left; border-right: 1px solid #ccc; height: 90vh; overflow-y: auto; }
+        #chatPanel { margin-left: 210px; padding: 10px; }
+        .user { cursor: pointer; padding: 5px; }
+        .user:hover { background: #eee; }
+        .chatBox { border: 1px solid #ccc; margin-bottom: 10px; padding: 5px; height: 200px; overflow-y: auto; }
+        .chat-window { display: none; }
+    </style>
+</head>
+<body>
+<!-- Login Page -->
+<div id="login">
+    <h2>Login</h2>
+    <input type="text" id="username" placeholder="Enter username">
+    <button id="loginBtn">Login</button>
+    <p id="loginError" style="color:red;"></p>
+</div>
+
+<!-- Chat Page -->
+<div id="chat">
+    <div id="userList">
+        <h3>Users</h3>
+        <ul id="users"></ul>
+    </div>
+    <div id="chatPanel">
+        <h3>Chats</h3>
+        <div id="chats"></div>
+    </div>
+</div>
+
+<script>
+    let stompClient = null;
+    let username = null;
+    let channels = {};     // channelId -> {users, messages}
+    let activeChannel = null;
+
+    function connectWebSocket() {
+      stompClient = new StompJs.Client({
+        brokerURL: "ws://localhost:8080/ws/stomp", // use wss:// in production
+        reconnectDelay: 5000,                      // auto reconnect
+        heartbeatIncoming: 10000,                  // expect server heartbeats every 10s
+        heartbeatOutgoing: 10000,                  // send heartbeats every 10s
+        debug: () => {}                            // silence logs
+      });
+
+      stompClient.onConnect = (frame) => {
+        console.log("Connected: ", frame);
+
+        // Send connect message
+        stompClient.publish({
+          destination: "/endpoint/chat/connect",
+          body: JSON.stringify({ user: username })
+        });
+
+        // Subscribe to initial user list
+        stompClient.subscribe("/topic/user/" + username + "/connected", (message) => {
+          const data = JSON.parse(message.body);
+          updateUserList(data);
+        });
+
+        // Subscribe to user events
+        stompClient.subscribe("/topic/users/connected", (message) => {
+          const data = JSON.parse(message.body);
+          addUser(data.user);
+        });
+
+        stompClient.subscribe("/topic/users/disconnected", (message) => {
+          const data = JSON.parse(message.body);
+          removeUser(data.user);
+        });
+
+        // Subscribe to channel creation notifications
+        stompClient.subscribe("/topic/user/" + username + "/channel", (message) => {
+          const data = JSON.parse(message.body);
+          const { channelId, users } = data;
+          if (!channels[channelId]) {
+            channels[channelId] = { users, messages: [] };
+            subscribeToChannel(channelId);
+          }
+        });
+      };
+
+      stompClient.onStompError = (frame) => {
+        console.error("Broker error: " + frame.headers["message"]);
+        console.error("Details: " + frame.body);
+      };
+
+      stompClient.activate();
+    }
+
+    function subscribeToChannel(channelId) {
+      stompClient.subscribe("/topic/channel" + channelId, (message) => {
+        const data = JSON.parse(message.body);
+        addMessage(channelId, data.sender, data.message);
+      });
+    }
+
+    function updateUserList(users) {
+      $("#users").empty();
+      users.forEach(u => { if (u !== username) addUser(u); });
+    }
+
+    function addUser(user) {
+      if ($("#user-" + user).length === 0 && user !== username) {
+        $("#users").append(`<li class="user" id="user-${user}" data-user="${user}">${user}</li>`);
+      }
+    }
+
+    function removeUser(user) {
+      $("#user-" + user).remove();
+    }
+
+    function openChatWith(user) {
+      let existingChannel = Object.keys(channels).find(cid => channels[cid].users.includes(user));
+      if (existingChannel) {
+        showChat(existingChannel);
+        return;
+      }
+      stompClient.publish({
+        destination: "/endpoint/chat/create",
+        body: JSON.stringify({ users: [username, user] })
+      });
+    }
+
+    function showChat(channelId) {
+      activeChannel = channelId;
+      $(".chat-window").hide();
+
+      if ($("#chat-" + channelId).length === 0) {
+        $("#chats").append(`
+          <div class="chat-window" id="chat-${channelId}">
+            <h4>Chat with ${channels[channelId].users.filter(u => u !== username).join(", ")}</h4>
+            <div class="chatBox" id="chatBox-${channelId}"></div>
+            <input type="text" id="msg-${channelId}" placeholder="Type message">
+            <button onclick="sendMessage('${channelId}')">Send</button>
+          </div>
+        `);
+      }
+
+      $("#chat-" + channelId).show();
+      renderMessages(channelId);
+    }
+
+    function renderMessages(channelId) {
+      const box = $("#chatBox-" + channelId);
+      box.empty();
+      channels[channelId].messages.forEach(m => {
+        box.append(`<div><b>${m.sender}:</b> ${m.message}</div>`);
+      });
+      box.scrollTop(box[0].scrollHeight);
+    }
+
+    function addMessage(channelId, sender, message) {
+      channels[channelId].messages.push({ sender, message });
+      if (activeChannel === channelId) {
+        $("#chatBox-" + channelId).append(`<div><b>${sender}:</b> ${message}</div>`);
+        const box = $("#chatBox-" + channelId);
+        box.scrollTop(box[0].scrollHeight);
+      }
+    }
+
+    function sendMessage(channelId) {
+      const msg = $("#msg-" + channelId).val();
+      if (msg.trim().length === 0) return;
+      stompClient.publish({
+        destination: "/endpoint/chat/send",
+        body: JSON.stringify({ channelId, sender: username, message: msg })
+      });
+      $("#msg-" + channelId).val("");
+    }
+
+    $(document).ready(function () {
+      $("#login").show();
+
+      $("#loginBtn").click(function () {
+        username = $("#username").val().trim();
+        if (!username) {
+          $("#loginError").text("Username required");
+          return;
+        }
+
+        // REST login
+        $.ajax({
+          url: "/user/login",
+          method: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ user: username }),
+          success: function () {
+            $("#login").hide();
+            $("#chat").show();
+            connectWebSocket();
+          },
+          error: function (xhr) {
+            $("#loginError").text(xhr.responseText || "Login failed");
+          }
+        });
+      });
+
+      $(document).on("click", ".user", function () {
+        const targetUser = $(this).data("user");
+        openChatWith(targetUser);
+      });
+
+      // Handle disconnect on close
+      $(window).on("beforeunload", function () {
+        if (stompClient && stompClient.active) {
+          stompClient.publish({
+            destination: "/endpoint/chat/disconnect",
+            body: JSON.stringify({ user: username })
+          });
+          stompClient.deactivate();
+        }
+      });
+    });
+</script>
+</body>
+</html>

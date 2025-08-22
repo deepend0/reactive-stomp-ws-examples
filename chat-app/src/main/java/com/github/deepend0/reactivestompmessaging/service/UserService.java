@@ -1,10 +1,12 @@
 package com.github.deepend0.reactivestompmessaging.service;
 
 import io.vertx.core.impl.ConcurrentHashSet;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.HashSet;
 import java.util.Set;
 
+@ApplicationScoped
 public class UserService {
     private final ConcurrentHashSet<String> currentUsers = new ConcurrentHashSet<>();
 

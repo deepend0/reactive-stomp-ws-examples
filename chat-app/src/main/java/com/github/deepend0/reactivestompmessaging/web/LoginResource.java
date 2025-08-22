@@ -1,14 +1,19 @@
 package com.github.deepend0.reactivestompmessaging.web;
 
 
+import com.github.deepend0.reactivestompmessaging.model.UserDto;
 import com.github.deepend0.reactivestompmessaging.service.UserService;
 import io.vertx.core.impl.ConcurrentHashSet;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.MediaType;
 import org.jboss.resteasy.reactive.RestResponse;
 
-@Path("/login")
+@ApplicationScoped
+@Path("/user")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 public class LoginResource {
     private final UserService userService;
 
@@ -17,9 +22,10 @@ public class LoginResource {
     }
 
     @POST
-    public RestResponse<String> login(String username) {
+    @Path("/login")
+    public RestResponse<String> login(UserDto userDto) {
         try {
-            userService.addUser(username);
+            userService.addUser(userDto.user());
             return RestResponse.ResponseBuilder.<String>ok().build();
         } catch (IllegalArgumentException e) {
             return RestResponse.ResponseBuilder.create(RestResponse.Status.BAD_REQUEST, e.getMessage()).build();
@@ -27,9 +33,10 @@ public class LoginResource {
     }
 
     @POST
-    public RestResponse<String> logout(String username) {
+    @Path("/logout")
+    public RestResponse<String> logout(UserDto userDto) {
         try {
-            userService.removeUser(username);
+            userService.removeUser(userDto.user());
             return RestResponse.ResponseBuilder.<String>ok().build();
         } catch (IllegalArgumentException e) {
             return RestResponse.ResponseBuilder.create(RestResponse.Status.BAD_REQUEST, e.getMessage()).build();
