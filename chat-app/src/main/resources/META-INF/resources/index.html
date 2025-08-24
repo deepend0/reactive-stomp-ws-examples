@@ -30,6 +30,7 @@
 <div id="chat">
     <div id="userList">
         <h3>Users</h3>
+        <div id="currentUser" style="font-weight:bold; margin-bottom:10px;"></div>
         <ul id="users"></ul>
     </div>
     <div id="chatPanel">
@@ -43,29 +44,24 @@
     let username = null;
     let channels = {};     // channelId -> {users, messages}
     let activeChannel = null;
+    let pendingUser = null;
 
     function connectWebSocket() {
       stompClient = new StompJs.Client({
         brokerURL: "ws://localhost:8080/ws/stomp", // use wss:// in production
         reconnectDelay: 5000,                      // auto reconnect
-        heartbeatIncoming: 10000,                  // expect server heartbeats every 10s
-        heartbeatOutgoing: 10000,                  // send heartbeats every 10s
+        heartbeatIncoming: 60000,                  // expect server heartbeats every 10s
+        heartbeatOutgoing: 60000,                  // send heartbeats every 10s
         debug: () => {}                            // silence logs
       });
 
       stompClient.onConnect = (frame) => {
         console.log("Connected: ", frame);
 
-        // Send connect message
-        stompClient.publish({
-          destination: "/endpoint/chat/connect",
-          body: JSON.stringify({ user: username })
-        });
-
         // Subscribe to initial user list
         stompClient.subscribe("/topic/user/" + username + "/connected", (message) => {
           const data = JSON.parse(message.body);
-          updateUserList(data);
+          updateUserList(data.users);
         });
 
         // Subscribe to user events
@@ -79,6 +75,12 @@
           removeUser(data.user);
         });
 
+        // Send connect message
+        stompClient.publish({
+          destination: "/endpoint/chat/connect",
+          body: JSON.stringify({ user: username })
+        });
+
         // Subscribe to channel creation notifications
         stompClient.subscribe("/topic/user/" + username + "/channel", (message) => {
           const data = JSON.parse(message.body);
@@ -86,6 +88,11 @@
           if (!channels[channelId]) {
             channels[channelId] = { users, messages: [] };
             subscribeToChannel(channelId);
+          }
+
+          if (pendingUser && users.includes(pendingUser)) {
+            showChat(channelId);
+            pendingUser = null;
           }
         });
       };
@@ -99,7 +106,7 @@
     }
 
     function subscribeToChannel(channelId) {
-      stompClient.subscribe("/topic/channel" + channelId, (message) => {
+      stompClient.subscribe("/topic/channel/" + channelId, (message) => {
         const data = JSON.parse(message.body);
         addMessage(channelId, data.sender, data.message);
       });
@@ -126,6 +133,8 @@
         showChat(existingChannel);
         return;
       }
+      // Mark as pending → once the channel is created we open it
+      pendingUser = user;
       stompClient.publish({
         destination: "/endpoint/chat/create",
         body: JSON.stringify({ users: [username, user] })
@@ -170,11 +179,15 @@
     }
 
     function sendMessage(channelId) {
-      const msg = $("#msg-" + channelId).val();
-      if (msg.trim().length === 0) return;
+      const msg = $("#msg-" + channelId).val().trim();
+      if (msg.length === 0) return;
       stompClient.publish({
-        destination: "/endpoint/chat/send",
-        body: JSON.stringify({ channelId, sender: username, message: msg })
+        destination: "/endpoint/chat/message",
+        body: JSON.stringify({
+          channelId,
+          sender: username,
+          message: msg
+        })
       });
       $("#msg-" + channelId).val("");
     }
@@ -198,6 +211,7 @@
           success: function () {
             $("#login").hide();
             $("#chat").show();
+            $("#currentUser").text("You: " + username);
             connectWebSocket();
           },
           error: function (xhr) {

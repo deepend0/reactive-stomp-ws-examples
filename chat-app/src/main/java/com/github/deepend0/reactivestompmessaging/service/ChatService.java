@@ -17,11 +17,11 @@ public class ChatService {
     }
 
     public String createChannel(Set<String> users) {
-        if(userService.getCurrentUsers().containsAll(users)) {
-            throw new IllegalArgumentException("All users must be logged in");
-        }
         if (users == null || users.isEmpty()) {
             throw new IllegalArgumentException("Users cannot be null or empty");
+        }
+        if(!userService.getCurrentUsers().containsAll(users)) {
+            throw new IllegalArgumentException("All users must be logged in");
         }
         if (userChats.containsValue(users)) {
             throw new IllegalArgumentException("Channel with these users already exists");
