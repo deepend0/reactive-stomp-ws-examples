@@ -1,6 +1,10 @@
 quarkus:
   http:
     port: 8080
+  websockets-next:
+    server:
+      propagate-subprotocol-headers: true
+      supported-subprotocols: v12.stomp,v11.stomp
 
 reactive-stomp:
   heartbeat: 1000, 1000

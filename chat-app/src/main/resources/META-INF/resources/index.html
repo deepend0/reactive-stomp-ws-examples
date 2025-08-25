@@ -59,7 +59,7 @@
         console.log("Connected: ", frame);
 
         // Subscribe to initial user list
-        stompClient.subscribe("/topic/user/" + username + "/connected", (message) => {
+        stompClient.subscribe("/topic/user/" + username + "/currentUsers", (message) => {
           const data = JSON.parse(message.body);
           updateUserList(data.users);
         });
@@ -77,8 +77,8 @@
 
         // Send connect message
         stompClient.publish({
-          destination: "/endpoint/chat/connect",
-          body: JSON.stringify({ user: username })
+          destination: "/endpoint/chat/connect/" + username,
+          body: JSON.stringify({ user: username, fullName: "User " + username })
         });
 
         // Subscribe to channel creation notifications
@@ -182,7 +182,7 @@
       const msg = $("#msg-" + channelId).val().trim();
       if (msg.length === 0) return;
       stompClient.publish({
-        destination: "/endpoint/chat/message",
+        destination: "/endpoint/chat/" + channelId + "/message",
         body: JSON.stringify({
           channelId,
           sender: username,
@@ -229,8 +229,8 @@
       $(window).on("beforeunload", function () {
         if (stompClient && stompClient.active) {
           stompClient.publish({
-            destination: "/endpoint/chat/disconnect",
-            body: JSON.stringify({ user: username })
+            destination: "/endpoint/chat/disconnect/" + username,
+            body: JSON.stringify({ user: username, fullName: "User " + username})
           });
           stompClient.deactivate();
         }
