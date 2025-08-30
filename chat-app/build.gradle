@@ -14,12 +14,12 @@ dependencies {
     implementation 'io.quarkus:quarkus-rest-jackson'
     implementation 'io.quarkus:quarkus-websockets'
     implementation 'io.quarkus:quarkus-arc'
-    implementation 'com.github.deepend0:reactive-stomp-base:1.0-SNAPSHOT'
+    implementation 'com.github.deepend0:reactive-stomp-ws-base:0.1.0'
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.rest-assured:rest-assured'
 }
 
-group = 'com.github.deepend0.reactivestompmessaging'
+group = 'com.github.deepend0.reactivestompws'
 version = '1.0.0-SNAPSHOT'
 
 java {
