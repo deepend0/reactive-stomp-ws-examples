@@ -9,7 +9,9 @@ quarkus:
 reactive-stomp:
   heartbeat: 1000, 1000
   messaging:
+    broker:
+      regex: /topic.*
     message-endpoint:
-      paths: /endpoint
+      regex: /endpoint.*
   stomp:
     ackPeriod: 1000
